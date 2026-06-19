@@ -16,12 +16,12 @@ class GoalkeeperController(Node):
         self.get_logger().info(f'Goalkeeper position: x ={position.x:.2f}, y={position.y:.3f}')
         cmd = TwistStamped()
         cmd.header.stamp = self.get_clock().now().to_msg()
-        if position.x < 0.9:
-            cmd.twist.linear.x = 0.2
-        elif position.x > 1.1:
-            cmd.twist.linear.x = -0.2
-        else:
+        error = 1.0 - position.x
+
+        if abs(error) < 0.005:
             cmd.twist.linear.x = 0.0
+        else:
+            cmd.twist.linear.x = 0.5 * error
         
         self.publisher_.publish(cmd)
 
