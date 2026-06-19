@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+from glob import glob
+import os
 
 package_name = 'soccer_goalkeeper'
 
@@ -10,6 +12,10 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (
+            os.path.join('share', package_name, 'models', 'soccer_ball'),
+            glob('models/soccer_ball/*')
+        ),
     ],
     package_data={'': ['py.typed']},
     install_requires=['setuptools'],
@@ -27,7 +33,8 @@ setup(
         'console_scripts': [
             'odom_monitor = soccer_goalkeeper.odom_monitor:main',
             'goalkeeper_controller = soccer_goalkeeper.goalkeeper_controller:main',
-            'ball_launcher = soccer_goalkeeper.ball_launcher:main'
+            'ball_launcher = soccer_goalkeeper.ball_launcher:main',
+            'ball_tracker = soccer_goalkeeper.ball_tracker:main',
         ],
     },
 )

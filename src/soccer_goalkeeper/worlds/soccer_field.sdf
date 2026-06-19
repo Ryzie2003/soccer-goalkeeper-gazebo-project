@@ -268,6 +268,12 @@
   </link>
 </model>
 
+  <include>
+    <uri>model://turtlebot3_burger</uri>
+    <name>burger</name>
+    <pose>2.4 0 0.05 0 0 1.5708</pose>
+  </include>
+
     <model name="soccer_ball">
   <pose>-1.5 0 0.12 0 0 0</pose>
 
@@ -316,6 +322,12 @@
       </material>
     </visual>
   </link>
+  <plugin filename="gz-sim-pose-publisher-system"
+   name="gz::sim::systems::PosePublisher">
+    <publish_model_pose>true</publish_model_pose>
+    <publish_link_pose>false</publish_link_pose>
+    <use_pose_vector_msg>true</use_pose_vector_msg>
+  </plugin> 
 </model>
   </world>
 </sdf>
