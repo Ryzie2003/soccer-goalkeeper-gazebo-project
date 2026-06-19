@@ -22,6 +22,9 @@
     filename="gz-sim-imu-system"
     name="gz::sim::systems::Imu">
   </plugin>
+  <plugin filename="gz-sim-apply-link-wrench-system"
+   name="gz::sim::systems::ApplyLinkWrench">             
+  </plugin> 
     
 
     <include>
@@ -263,6 +266,56 @@
 </visual>
 
   </link>
-</model>            
+</model>
+
+    <model name="soccer_ball">
+  <pose>-1.5 0 0.12 0 0 0</pose>
+
+  <link name="ball_link">
+    <inertial>
+      <mass>0.43</mass>
+      <inertia>
+        <ixx>0.00208</ixx>
+        <iyy>0.00208</iyy>
+        <izz>0.00208</izz>
+      </inertia>
+    </inertial>
+
+    <collision name="ball_collision">
+      <geometry>
+        <sphere>
+          <radius>0.11</radius>
+        </sphere>
+      </geometry>
+
+      <surface>
+        <friction>
+          <ode>
+            <mu>0.6</mu>
+            <mu2>0.6</mu2>
+          </ode>
+        </friction>
+
+        <bounce>
+          <restitution_coefficient>0.5</restitution_coefficient>
+          <threshold>0.1</threshold>
+        </bounce>
+      </surface>
+    </collision>
+
+    <visual name="ball_visual">
+      <geometry>
+        <sphere>
+          <radius>0.11</radius>
+        </sphere>
+      </geometry>
+
+      <material>
+        <ambient>1 0.45 0.05 1</ambient>
+        <diffuse>1 0.45 0.05 1</diffuse>
+      </material>
+    </visual>
+  </link>
+</model>
   </world>
 </sdf>

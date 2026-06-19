@@ -26,7 +26,8 @@ setup(
     entry_points={
         'console_scripts': [
             'odom_monitor = soccer_goalkeeper.odom_monitor:main',
-            'goalkeeper_controller = soccer_goalkeeper.goalkeeper_controller:main'
+            'goalkeeper_controller = soccer_goalkeeper.goalkeeper_controller:main',
+            'ball_launcher = soccer_goalkeeper.ball_launcher:main'
         ],
     },
 )
