@@ -1,47 +1,49 @@
 # ROS 2 Soccer Goalkeeper
 
-A ROS 2 Lyrical and Gazebo Sim project in which a TurtleBot3 goalkeeper
-estimates where a moving ball will cross the goal line and drives to intercept
-it.
+A ROS 2 Lyrical and Gazebo Sim project in which a mobile goalkeeper uses
+fused overhead and side cameras to estimate where a moving ball will cross
+the goal line and drives to intercept it.
 
-The current implementation uses Gazebo ground-truth ball poses as a working
-tracking baseline. Camera-based perception is planned as the next major
-upgrade.
+Gazebo ground truth is reserved for debugging and officiating. It does not
+control the goalkeeper.
 
 ## Current Features
 
-- Custom Gazebo soccer field, goal, net, and physical ball
-- TurtleBot3 Burger goalkeeper positioned along the goal line
-- Randomized forward and sideways shot forces
-- Ball position and velocity estimation
-- Linear goal-line intersection prediction
-- Closed-loop proportional goalkeeper control
+- Custom Gazebo soccer field, enlarged goal, physical net, and soccer ball
+- Soccer-player goalkeeper driven by hidden TurtleBot3 differential-drive
+  physics
+- Broad triangular shot distribution with varied speed, lateral placement,
+  and airborne height while favoring saveable trajectories
+- Fused overhead and side-camera 3D ball estimation
+- Median-filtered measurements with outlier rejection
+- Alpha-beta 3D state estimation and ballistic goal-line prediction
+- Closed-loop lateral control with movable arms, jumping, and diving
+- Geometry-based goal and save classification with cumulative statistics
+- Dedicated goal-line camera and buffered slow-motion VAR-style replay
+- RViz replay with goal-line overlay, tracked ball, measurements, and decision
 - Automatic reset of the ball, goalkeeper, velocities, and simulation time
-- One-command launch for Gazebo, bridges, tracking, and control
+- One-command launch for Gazebo, bridges, perception, control, and RViz
 
 ## System Architecture
 
 ```text
-ball_launcher
-    |
-    | /world/default/wrench
-    v
-Gazebo ball physics
-    |
-    | /model/soccer_ball/pose
-    v
-ball_tracker
-    |
-    | /predicted_intercept
-    v
-goalkeeper_controller <--- /odom
-    |
-    | /cmd_vel
-    v
-TurtleBot3 goalkeeper
+overhead camera ----\
+                     > filtered camera fusion -> 3D state estimator
+side camera --------/                            |
+                                                 | intercept y, z, arrival time
+                                                 v
+                                          action controller
+                                      /          |           \
+                               arm joints    jump wrench    dive motion
+
+goal-line camera -> replay buffer -> /goal_line_replay -> RViz
+                          ^
+                          | /goal_line_event
+                    ground-truth referee
 ```
 
 `ros_gz_bridge` translates messages between ROS 2 and Gazebo Transport.
+Ground truth enters only the referee and comparison tracker.
 
 ## ROS 2 Nodes
 
@@ -49,7 +51,13 @@ TurtleBot3 goalkeeper
 | --- | --- |
 | `ball_launcher` | Applies a randomized force to the ball and resets the simulation after each trial |
 | `ball_tracker` | Estimates ball velocity and predicts its goal-line crossing position |
-| `goalkeeper_controller` | Converts the predicted intercept into TurtleBot velocity commands |
+| `camera_ball_detector` | Detects the black-and-white ball in the overhead camera image |
+| `side_camera_ball_detector` | Detects the ball in the side image for height estimation |
+| `camera_ball_fusion` | Combines overhead ground projection with side-camera height |
+| `camera_ball_tracker` | Estimates velocity from camera-derived field positions and predicts the goal-line intercept |
+| `goalkeeper_controller` | Selects tracking, jump, and dive actions from predicted lateral position, height, and arrival time |
+| `referee` | Uses ground-truth goal-line geometry to classify each trial as a goal or save and publishes cumulative statistics |
+| `goal_line_replay` | Buffers goal-line footage and publishes annotated half-speed reviews to RViz |
 | `odom_monitor` | Optional debugging node that prints goalkeeper odometry |
 
 ## Important Interfaces
@@ -62,6 +70,19 @@ TurtleBot3 goalkeeper
 | `/cmd_vel` | `geometry_msgs/msg/TwistStamped` | Goalkeeper motion command |
 | `/world/default/wrench` | `ros_gz_interfaces/msg/EntityWrench` | Ball shot command |
 | `/world/default/control` | `ros_gz_interfaces/srv/ControlWorld` | Simulation reset |
+| `/shot_result` | `std_msgs/msg/String` | Latest `GOAL` or `SAVE` result |
+| `/shot_statistics` | `std_msgs/msg/String` | Shot count, goals, saves, and save rate |
+| `/camera_ball_pixel` | `geometry_msgs/msg/PointStamped` | Detected ball pixel center; `z` stores contour area |
+| `/camera_ball_position` | `geometry_msgs/msg/PointStamped` | Camera-estimated ball position in field metres |
+| `/camera_predicted_intercept` | `std_msgs/msg/Float64` | Goal-line prediction derived only from camera measurements |
+| `/camera_predicted_intercept_3d` | `geometry_msgs/msg/PointStamped` | Predicted lateral intercept, height, and seconds until arrival |
+| `/goalkeeper/action` | `std_msgs/msg/String` | Current `TRACK`, `JUMP`, `DIVE_LEFT`, `DIVE_RIGHT`, or `RECOVER` action |
+| `/goalkeeper/left_arm_cmd` | `std_msgs/msg/Float64` | Left shoulder position command |
+| `/goalkeeper/right_arm_cmd` | `std_msgs/msg/Float64` | Right shoulder position command |
+| `/camera_ball_debug` | `sensor_msgs/msg/Image` | Camera image annotated with the detected ball |
+| `/goal_line_camera/image` | `sensor_msgs/msg/Image` | Raw dedicated goal-line camera |
+| `/goal_line_event` | `std_msgs/msg/String` | Official `GOAL` or `NO_GOAL` replay trigger |
+| `/goal_line_replay` | `sensor_msgs/msg/Image` | Live and slow-motion annotated RViz feed |
 
 ## Build
 
@@ -77,57 +98,90 @@ from `~/.bashrc`.
 
 ## Run the Demo
 
-Start Gazebo, both bridges, the ball tracker, and the goalkeeper controller:
+Start Gazebo and all ROS nodes:
 
 ```bash
 ros2 launch soccer_goalkeeper soccer_demo.launch.py
 ```
 
-In another terminal, begin one shot:
+Start the complete demo and open RViz directly on the replay:
 
 ```bash
-ros2 run soccer_goalkeeper ball_launcher
+ros2 launch soccer_goalkeeper soccer_demo.launch.py launch_rviz:=true
 ```
 
-The launcher fires after one second and resets the simulation after six
-seconds.
+In another terminal, begin the default 30-trial batch:
+
+```bash
+ros2 run soccer_goalkeeper ball_launcher --ros-args -p use_sim_time:=true
+```
+
+The launcher verifies that Gazebo applied every shot, announces the end of
+each trial one second before reset, confirms the ball returned to its starting
+pose, and automatically continues until all 30 trials are complete. Goal-line
+reviews run independently and queue if necessary. Override the batch size
+with:
+
+```bash
+ros2 run soccer_goalkeeper ball_launcher --ros-args \
+  -p use_sim_time:=true -p trial_count:=10
+```
+
+## Goal-Line Replay
+
+The goal-line camera is positioned so the `x=2.7 m` goal plane appears at the
+center of its image. The replay node continuously retains 4.5 seconds of
+camera footage. When the referee publishes `/goal_line_event`, it adds 0.6
+seconds of post-event footage and publishes the sequence at 15 FPS, half the
+camera capture rate.
+
+The referee applies the whole-ball rule. For a ball moving into the goal, its
+trailing edge must cross the plane:
+
+```text
+ball_center_x - ball_radius >= goal_line_x
+```
+
+The crossing must also be between the posts and below the crossbar. The replay
+shows the tracked ball, goal line, ball-edge coordinate, signed distance from
+the line, height, and final `GOAL` or `NO GOAL` decision.
 
 ## Current Prediction Model
 
-The tracker estimates velocity from consecutive pose samples:
+The camera pipeline detects the black-and-white ball, rejects implausible
+measurements, median-filters the fused views, and uses an alpha-beta filter to
+estimate 3D position and velocity.
 
 ```text
 velocity = change in position / elapsed time
 ```
 
-It then assumes approximately constant velocity:
+Horizontal crossing uses the filtered velocity:
 
 ```text
 time to goal = remaining x distance / x velocity
 predicted y  = current y + y velocity * time to goal
 ```
 
-The controller uses the predicted `y` position as its target along the goal
-line.
+Vertical crossing uses a ballistic model with gravity. The action controller
+uses predicted lateral position, crossing height, and arrival time to choose
+between normal tracking, a jump, or a high-speed dive. Shoulder joints move
+the gloves toward high and wide shots.
 
 ## Limitations
 
-- Ball tracking currently uses perfect Gazebo pose data rather than camera
-  detections.
-- The trajectory model assumes constant velocity and does not explicitly
-  model acceleration or measurement uncertainty.
-- The TurtleBot still looks like a mobile robot rather than a soccer player.
-- Goal, save, and miss statistics are not yet recorded.
+- Camera calibration is tied to the configured simulated camera poses.
+- Horizontal prediction assumes approximately constant velocity between
+  bounces.
+- Jump and dive thresholds are tuned for the simulated player mass and goal.
+- Replay decisions use Gazebo ground truth as the authoritative simulated
+  goal-line sensor; camera footage provides the visual evidence.
 
 ## Roadmap
 
-- Add repeatable trials and goal/save/miss metrics
-- Add a simulated camera and ROS image stream
-- Detect and track the ball using OpenCV
-- Replace ground-truth tracking with camera-derived field coordinates
-- Keep ground-truth tracking as an optional debugging baseline
-- Customize or replace the goalkeeper model to resemble a soccer player
-- Add launch parameters, documentation, tests, and a polished demo video
+- Add prediction-error and reaction-latency metrics
+- Add contact sensors for explicit glove and body saves
+- Record a polished demo video and representative trial statistics
 
 ## Repository Layout
 

@@ -1,6 +1,7 @@
-from setuptools import find_packages, setup
-from glob import glob
 import os
+from glob import glob
+
+from setuptools import find_packages, setup
 
 package_name = 'soccer_goalkeeper'
 
@@ -21,8 +22,16 @@ setup(
             glob('worlds/*.sdf')
         ),
         (
+            os.path.join('share', package_name, 'rviz'),
+            glob('rviz/*.rviz')
+        ),
+        (
             os.path.join('share', package_name, 'models', 'soccer_ball'),
             glob('models/soccer_ball/*')
+        ),
+        (
+            os.path.join('share', package_name, 'models', 'goalkeeper'),
+            glob('models/goalkeeper/*')
         ),
     ],
     package_data={'': ['py.typed']},
@@ -40,9 +49,33 @@ setup(
     entry_points={
         'console_scripts': [
             'odom_monitor = soccer_goalkeeper.odom_monitor:main',
-            'goalkeeper_controller = soccer_goalkeeper.goalkeeper_controller:main',
+            (
+                'goalkeeper_controller = '
+                'soccer_goalkeeper.goalkeeper_controller:main'
+            ),
             'ball_launcher = soccer_goalkeeper.ball_launcher:main',
             'ball_tracker = soccer_goalkeeper.ball_tracker:main',
+            (
+                'camera_ball_detector = '
+                'soccer_goalkeeper.camera_ball_detector:main'
+            ),
+            (
+                'camera_ball_tracker = '
+                'soccer_goalkeeper.camera_ball_tracker:main'
+            ),
+            (
+                'side_camera_ball_detector = '
+                'soccer_goalkeeper.side_camera_ball_detector:main'
+            ),
+            (
+                'camera_ball_fusion = '
+                'soccer_goalkeeper.camera_ball_fusion:main'
+            ),
+            (
+                'goal_line_replay = '
+                'soccer_goalkeeper.goal_line_replay:main'
+            ),
+            'referee = soccer_goalkeeper.referee:main',
         ],
     },
 )

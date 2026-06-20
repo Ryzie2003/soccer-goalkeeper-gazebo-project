@@ -38,7 +38,19 @@ class BallTracker(Node):
         if self.previous_time is not None:
             elapsed = (current_time - self.previous_time).nanoseconds / 1e9
 
-            if elapsed > 0.0:
+            if elapsed < 0.0:
+                center_target = Float64()
+                center_target.data = 0.0
+                self.prediction_publisher.publish(center_target)
+
+                self.previous_x = None
+                self.previous_y = None
+                self.previous_time = None
+
+                self.get_logger().info(
+                    'Simulation reset detected; goalkeeper target centered'
+                )
+            elif elapsed > 0.0:
                 velocity_x = (position.x - self.previous_x) / elapsed
                 velocity_y = (position.y - self.previous_y) / elapsed
             

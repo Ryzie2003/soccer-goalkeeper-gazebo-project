@@ -8,9 +8,13 @@
   <license>Apache-2.0</license>
 
   <depend>rclpy</depend>
+  <depend>cv_bridge</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
+  <depend>ros_gz_image</depend>
   <depend>ros_gz_interfaces</depend>
+  <exec_depend>rviz2</exec_depend>
+  <depend>sensor_msgs</depend>
   <depend>tf2_msgs</depend>
   <depend>std_msgs</depend>
 
