@@ -20,8 +20,9 @@ class CameraBallFusion(Node):
     IMAGE_HEIGHT = 480
     HORIZONTAL_FOV = 1.2
     MAXIMUM_SIDE_OBSERVATION_AGE = 0.12
-    FILTER_WINDOW = 5
+    FILTER_WINDOW = 3
     MAXIMUM_POSITION_JUMP = 0.8
+    BALL_START_X = -1.5
 
     def __init__(self) -> None:
         super().__init__('camera_ball_fusion')
@@ -31,6 +32,7 @@ class CameraBallFusion(Node):
         self.y_history: deque[float] = deque(maxlen=self.FILTER_WINDOW)
         self.z_history: deque[float] = deque(maxlen=self.FILTER_WINDOW)
         self.last_position: tuple[float, float, float] | None = None
+        self.last_measurement_stamp: float | None = None
 
         self.overhead_subscription = self.create_subscription(
             PointStamped,
@@ -60,6 +62,14 @@ class CameraBallFusion(Node):
         self.side_observation = message
 
     def overhead_callback(self, message: PointStamped) -> None:
+        measurement_stamp = self.stamp_seconds(message)
+        if (
+            self.last_measurement_stamp is not None
+            and measurement_stamp < self.last_measurement_stamp
+        ):
+            self.reset_history('simulation clock reset')
+        self.last_measurement_stamp = measurement_stamp
+
         ground_x = message.point.x
         ground_y = message.point.y
         estimated_height = message.point.z
@@ -91,6 +101,10 @@ class CameraBallFusion(Node):
         measured_x = ground_x * perspective_scale
         measured_y = ground_y * perspective_scale
         measured_z = estimated_height
+
+        if self.ball_returned_to_start(measured_x, measured_y):
+            self.reset_history('ball returned to start')
+            self.last_measurement_stamp = measurement_stamp
 
         if self.measurement_is_plausible(
             measured_x,
@@ -191,6 +205,25 @@ class CameraBallFusion(Node):
             + (z - last_z) ** 2
         )
         return jump <= self.MAXIMUM_POSITION_JUMP
+
+    def ball_returned_to_start(self, x: float, y: float) -> bool:
+        if self.last_position is None:
+            return False
+
+        last_x, _, _ = self.last_position
+        return (
+            abs(x - self.BALL_START_X) <= 0.25
+            and abs(y) <= 0.25
+            and last_x > self.BALL_START_X + 0.75
+        )
+
+    def reset_history(self, reason: str) -> None:
+        self.x_history.clear()
+        self.y_history.clear()
+        self.z_history.clear()
+        self.last_position = None
+        self.side_observation = None
+        self.get_logger().info(f'Camera fusion reset: {reason}')
 
     @staticmethod
     def median(values) -> float:

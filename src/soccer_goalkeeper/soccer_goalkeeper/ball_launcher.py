@@ -322,7 +322,8 @@ class BallLauncher(Node):
         if self.completed_trials >= self.trial_count:
             self.batch_complete = True
             self.get_logger().info(
-                f'Automatic batch complete: {self.trial_count} trials'
+                f'Automatic batch complete: {self.trial_count} trials',
+                once=True
             )
             return
 

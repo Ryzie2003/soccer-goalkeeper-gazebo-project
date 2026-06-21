@@ -19,8 +19,8 @@ class CameraBallTracker(Node):
     GRAVITY = 9.81
     MINIMUM_FORWARD_SPEED = 0.05
     OBSERVATION_TIMEOUT = 0.5
-    ALPHA = 0.65
-    BETA = 0.18
+    ALPHA = 0.75
+    BETA = 0.35
     MAXIMUM_PREDICTION_TIME = 4.0
 
     def __init__(self) -> None:
@@ -46,6 +46,7 @@ class CameraBallTracker(Node):
         self.position: list[float] | None = None
         self.velocity: list[float] = [0.0, 0.0, 0.0]
         self.previous_time: Time | None = None
+        self.measurement_count = 0
         self.last_observation_time: Time | None = None
         self.shot_active = False
         self.center_published = True
@@ -55,7 +56,12 @@ class CameraBallTracker(Node):
         )
 
     def position_callback(self, message: PointStamped) -> None:
-        current_time = self.get_clock().now()
+        current_time = Time.from_msg(
+            message.header.stamp,
+            clock_type=self.get_clock().clock_type
+        )
+        if current_time.nanoseconds == 0:
+            current_time = self.get_clock().now()
         measurement = [
             message.point.x,
             message.point.y,
@@ -66,6 +72,7 @@ class CameraBallTracker(Node):
         if self.previous_time is None or self.position is None:
             self.position = measurement
             self.previous_time = current_time
+            self.measurement_count = 1
             return
 
         elapsed = (current_time - self.previous_time).nanoseconds / 1e9
@@ -73,6 +80,17 @@ class CameraBallTracker(Node):
             self.reset_filter()
             return
         if elapsed <= 0.0:
+            return
+
+        if self.measurement_count == 1:
+            self.velocity = [
+                (measurement[index] - self.position[index]) / elapsed
+                for index in range(3)
+            ]
+            self.position = measurement
+            self.previous_time = current_time
+            self.measurement_count = 2
+            self.publish_prediction(message)
             return
 
         predicted = [
@@ -94,6 +112,13 @@ class CameraBallTracker(Node):
             for index in range(3)
         ]
         self.previous_time = current_time
+        self.measurement_count += 1
+
+        self.publish_prediction(message)
+
+    def publish_prediction(self, message: PointStamped) -> None:
+        if self.position is None:
+            return
 
         x, y, z = self.position
         velocity_x, velocity_y, velocity_z = self.velocity
@@ -185,6 +210,7 @@ class CameraBallTracker(Node):
         self.velocity = [0.0, 0.0, 0.0]
         self.previous_time = None
         self.last_observation_time = None
+        self.measurement_count = 0
         self.shot_active = False
 
 

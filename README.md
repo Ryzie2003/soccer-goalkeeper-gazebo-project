@@ -163,8 +163,11 @@ predicted y  = current y + y velocity * time to goal
 
 Vertical crossing uses a ballistic model with gravity. The action controller
 uses predicted lateral position, crossing height, and arrival time to choose
-between normal tracking, a jump, or a high-speed lateral dive. The arms remain
-fixed and provide physical blocking coverage without separate joint control.
+between normal tracking, a jump, or a dive. Low dives combine wheel motion,
+lateral impulse, and body roll torque while remaining near the ground. High
+dives add vertical impulse so the goalkeeper launches diagonally toward an
+upper corner. The arms remain fixed and provide physical blocking coverage
+without separate joint control.
 
 ## Limitations
 
