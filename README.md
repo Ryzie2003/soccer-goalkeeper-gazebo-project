@@ -6,6 +6,9 @@ predicts soccer shots, moves across the goal, and performs jumping dives.
 The controller uses simulated camera measurements. Gazebo ground truth is used
 only by the referee and VAR system.
 
+## DEMO
+[![Watch the ROS 2 Soccer Goalkeeper Demo](https://img.youtube.com/vi/DX0d_M0N9cw/maxresdefault.jpg)]  ([https://youtu.be/abc123XYZ](https://youtu.be/DX0d_M0N9cw)) 
+
 ## Features
 
 - Custom soccer field, goal, net, ball, and player-style goalkeeper
