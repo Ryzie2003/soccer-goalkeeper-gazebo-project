@@ -8,7 +8,7 @@ only by the referee and VAR system.
 
 ## Demo                                                                                                                           
 Click the preview below to watch the full demonstration on YouTube.                                                                <p align="center">                                                                                     
-  <a href="[https://www.youtube.com/watch?v=](https://youtu.be/DX0d_M0N9cw)">                                               
+  <a href="[https://www.youtube.com/watch?v=DX0d_M0N9cw]">                                               
     <img src="https://img.youtube.com/vi/DX0d_M0N9cw/hqdefault.jpg" alt="Watch the ROS 2 Soccer Goalkeeper demo" width="700">      </a>                                                                                               
 </p>                                                                                                                                                                                                     
 ## Features
