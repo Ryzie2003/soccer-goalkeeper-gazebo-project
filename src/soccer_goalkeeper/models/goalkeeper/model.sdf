@@ -492,40 +492,16 @@
       <pose>0.0 0.0 0.010 0 0 0</pose>
     </joint>
 
-    <joint name="left_shoulder_joint" type="revolute">
+    <joint name="left_shoulder_joint" type="fixed">
       <parent>base_link</parent>
       <child>left_arm_link</child>
       <pose>0.08 0 0.56 0 0 0</pose>
-      <axis>
-        <xyz>0 1 0</xyz>
-        <limit>
-          <lower>-1.45</lower>
-          <upper>1.10</upper>
-          <effort>15</effort>
-          <velocity>8</velocity>
-        </limit>
-        <dynamics>
-          <damping>0.3</damping>
-        </dynamics>
-      </axis>
     </joint>
 
-    <joint name="right_shoulder_joint" type="revolute">
+    <joint name="right_shoulder_joint" type="fixed">
       <parent>base_link</parent>
       <child>right_arm_link</child>
       <pose>-0.08 0 0.56 0 0 0</pose>
-      <axis>
-        <xyz>0 1 0</xyz>
-        <limit>
-          <lower>-1.10</lower>
-          <upper>1.45</upper>
-          <effort>15</effort>
-          <velocity>8</velocity>
-        </limit>
-        <dynamics>
-          <damping>0.3</damping>
-        </dynamics>
-      </axis>
     </joint>
 
     <joint name="wheel_left_joint" type="revolute">
@@ -605,32 +581,6 @@
       <topic>joint_states</topic>
       <joint_name>wheel_left_joint</joint_name>
       <joint_name>wheel_right_joint</joint_name>
-      <joint_name>left_shoulder_joint</joint_name>
-      <joint_name>right_shoulder_joint</joint_name>
-    </plugin>
-
-    <plugin
-      filename="gz-sim-joint-position-controller-system"
-      name="gz::sim::systems::JointPositionController">
-      <joint_name>left_shoulder_joint</joint_name>
-      <topic>/goalkeeper/left_arm_cmd</topic>
-      <p_gain>12</p_gain>
-      <i_gain>0.1</i_gain>
-      <d_gain>0.8</d_gain>
-      <cmd_max>15</cmd_max>
-      <cmd_min>-15</cmd_min>
-    </plugin>
-
-    <plugin
-      filename="gz-sim-joint-position-controller-system"
-      name="gz::sim::systems::JointPositionController">
-      <joint_name>right_shoulder_joint</joint_name>
-      <topic>/goalkeeper/right_arm_cmd</topic>
-      <p_gain>12</p_gain>
-      <i_gain>0.1</i_gain>
-      <d_gain>0.8</d_gain>
-      <cmd_max>15</cmd_max>
-      <cmd_min>-15</cmd_min>
     </plugin>
 
   </model>

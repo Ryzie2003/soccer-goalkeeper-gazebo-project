@@ -67,16 +67,6 @@ def generate_launch_description():
                 '@tf2_msgs/msg/TFMessage'
                 '[gz.msgs.Pose_V'
             ),
-            (
-                '/goalkeeper/left_arm_cmd'
-                '@std_msgs/msg/Float64'
-                ']gz.msgs.Double'
-            ),
-            (
-                '/goalkeeper/right_arm_cmd'
-                '@std_msgs/msg/Float64'
-                ']gz.msgs.Double'
-            ),
         ],
         output='screen'
     )

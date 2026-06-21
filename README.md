@@ -12,12 +12,12 @@ control the goalkeeper.
 - Custom Gazebo soccer field, enlarged goal, physical net, and soccer ball
 - Soccer-player goalkeeper driven by hidden TurtleBot3 differential-drive
   physics
-- Broad triangular shot distribution with varied speed, lateral placement,
-  and airborne height while favoring saveable trajectories
+- Named upper-corner, lower-corner, and power-center shot profiles with varied
+  speed and airborne height
 - Fused overhead and side-camera 3D ball estimation
 - Median-filtered measurements with outlier rejection
 - Alpha-beta 3D state estimation and ballistic goal-line prediction
-- Closed-loop lateral control with movable arms, jumping, and diving
+- Closed-loop lateral control with fixed physical arms, jumping, and diving
 - Geometry-based goal and save classification with cumulative statistics
 - Dedicated goal-line camera and buffered slow-motion VAR-style replay
 - RViz replay with goal-line overlay, tracked ball, measurements, and decision
@@ -33,8 +33,8 @@ side camera --------/                            |
                                                  | intercept y, z, arrival time
                                                  v
                                           action controller
-                                      /          |           \
-                               arm joints    jump wrench    dive motion
+                                             /          \
+                                      jump wrench    dive motion
 
 goal-line camera -> replay buffer -> /goal_line_replay -> RViz
                           ^
@@ -77,8 +77,6 @@ Ground truth enters only the referee and comparison tracker.
 | `/camera_predicted_intercept` | `std_msgs/msg/Float64` | Goal-line prediction derived only from camera measurements |
 | `/camera_predicted_intercept_3d` | `geometry_msgs/msg/PointStamped` | Predicted lateral intercept, height, and seconds until arrival |
 | `/goalkeeper/action` | `std_msgs/msg/String` | Current `TRACK`, `JUMP`, `DIVE_LEFT`, `DIVE_RIGHT`, or `RECOVER` action |
-| `/goalkeeper/left_arm_cmd` | `std_msgs/msg/Float64` | Left shoulder position command |
-| `/goalkeeper/right_arm_cmd` | `std_msgs/msg/Float64` | Right shoulder position command |
 | `/camera_ball_debug` | `sensor_msgs/msg/Image` | Camera image annotated with the detected ball |
 | `/goal_line_camera/image` | `sensor_msgs/msg/Image` | Raw dedicated goal-line camera |
 | `/goal_line_event` | `std_msgs/msg/String` | Official `GOAL` or `NO_GOAL` replay trigger |
@@ -165,8 +163,8 @@ predicted y  = current y + y velocity * time to goal
 
 Vertical crossing uses a ballistic model with gravity. The action controller
 uses predicted lateral position, crossing height, and arrival time to choose
-between normal tracking, a jump, or a high-speed dive. Shoulder joints move
-the gloves toward high and wide shots.
+between normal tracking, a jump, or a high-speed lateral dive. The arms remain
+fixed and provide physical blocking coverage without separate joint control.
 
 ## Limitations
 

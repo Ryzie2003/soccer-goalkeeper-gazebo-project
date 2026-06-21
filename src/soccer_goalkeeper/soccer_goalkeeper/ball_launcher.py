@@ -26,10 +26,10 @@ class BallLauncher(Node):
         super().__init__('ball_launcher')
 
         self.declare_parameter('minimum_forward_force', 800.0)
-        self.declare_parameter('maximum_forward_force', 2600.0)
-        self.declare_parameter('maximum_lateral_force', 280.0)
-        self.declare_parameter('minimum_vertical_force', 250.0)
-        self.declare_parameter('maximum_vertical_force', 950.0)
+        self.declare_parameter('maximum_forward_force', 2900.0)
+        self.declare_parameter('maximum_lateral_force', 360.0)
+        self.declare_parameter('minimum_vertical_force', 180.0)
+        self.declare_parameter('maximum_vertical_force', 1100.0)
         self.declare_parameter('trial_count', 30)
 
         self.minimum_forward_force = self.get_parameter(
@@ -92,6 +92,7 @@ class BallLauncher(Node):
         self.reset_response_received = False
         self.ball_reset_observed = False
         self.batch_complete = False
+        self.pending_shot_style = 'UNSET'
 
         self.get_logger().info(
             f'Automatic trial batch configured for {self.trial_count} shots'
@@ -180,41 +181,7 @@ class BallLauncher(Node):
         shot = EntityWrench()
         shot.entity.name = 'soccer_ball::ball_link'
         shot.entity.type = 3  # LINK
-
-        forward_mode = (
-            self.minimum_forward_force
-            + 0.47
-            * (
-                self.maximum_forward_force
-                - self.minimum_forward_force
-            )
-        )
-        vertical_mode = (
-            self.minimum_vertical_force
-            + 0.29
-            * (
-                self.maximum_vertical_force
-                - self.minimum_vertical_force
-            )
-        )
-
-        # Triangular sampling permits a broad range of trajectories while
-        # keeping most trials within the goalkeeper's realistic reach.
-        shot.wrench.force.x = random.triangular(
-            self.minimum_forward_force,
-            self.maximum_forward_force,
-            forward_mode
-        )
-        shot.wrench.force.y = random.triangular(
-            -self.maximum_lateral_force,
-            self.maximum_lateral_force,
-            0.0
-        )
-        shot.wrench.force.z = random.triangular(
-            self.minimum_vertical_force,
-            self.maximum_vertical_force,
-            vertical_mode
-        )
+        self.configure_shot_profile(shot)
 
         self.pending_shot = shot
         self.shot_origin = self.latest_position
@@ -232,7 +199,8 @@ class BallLauncher(Node):
 
         self.get_logger().info(
             f'Trial {self.completed_trials + 1}/{self.trial_count}: '
-            f'shot command sent (attempt {self.launch_attempts}) with force '
+            f'{self.pending_shot_style} shot sent '
+            f'(attempt {self.launch_attempts}) with force '
             f'x={pending_shot.wrench.force.x:.0f}, '
             f'y={pending_shot.wrench.force.y:.0f}, '
             f'z={pending_shot.wrench.force.z:.0f} N'
@@ -375,9 +343,71 @@ class BallLauncher(Node):
         self.launch_attempts = 0
         self.launch_failed = False
         self.trial_ending_published = False
+        self.pending_shot_style = 'UNSET'
         self.waiting_for_reset = False
         self.reset_response_received = False
         self.ball_reset_observed = False
+
+    def configure_shot_profile(self, shot: EntityWrench) -> None:
+        profile = random.choices(
+            population=(
+                'TOP_LEFT',
+                'TOP_RIGHT',
+                'LOW_LEFT',
+                'LOW_RIGHT',
+                'POWER_CENTER',
+            ),
+            weights=(24, 24, 20, 20, 12),
+            k=1
+        )[0]
+        self.pending_shot_style = profile
+
+        shot.wrench.force.x = random.triangular(
+            self.minimum_forward_force,
+            self.maximum_forward_force,
+            1850.0
+        )
+
+        if profile.endswith('LEFT'):
+            lateral_sign = 1.0
+        elif profile.endswith('RIGHT'):
+            lateral_sign = -1.0
+        else:
+            lateral_sign = random.choice((-1.0, 1.0))
+
+        if profile.startswith('TOP'):
+            lateral_magnitude = random.triangular(
+                190.0,
+                self.maximum_lateral_force,
+                285.0
+            )
+            vertical_force = random.triangular(
+                650.0,
+                self.maximum_vertical_force,
+                850.0
+            )
+        elif profile.startswith('LOW'):
+            lateral_magnitude = random.triangular(
+                220.0,
+                self.maximum_lateral_force,
+                300.0
+            )
+            vertical_force = random.triangular(
+                self.minimum_vertical_force,
+                480.0,
+                300.0
+            )
+        else:
+            lateral_magnitude = random.triangular(0.0, 150.0, 60.0)
+            vertical_force = random.triangular(350.0, 780.0, 500.0)
+            shot.wrench.force.x = random.triangular(
+                2100.0,
+                self.maximum_forward_force,
+                2500.0
+            )
+
+        shot.wrench.force.y = lateral_sign * lateral_magnitude
+        shot.wrench.force.z = vertical_force
 
 
 def main(args=None) -> None:

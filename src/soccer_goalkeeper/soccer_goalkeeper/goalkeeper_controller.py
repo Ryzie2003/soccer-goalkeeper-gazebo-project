@@ -9,7 +9,7 @@ from rclpy.node import Node
 
 from ros_gz_interfaces.msg import EntityWrench
 
-from std_msgs.msg import Float64, String
+from std_msgs.msg import String
 
 
 class GoalkeeperController(Node):
@@ -63,16 +63,6 @@ class GoalkeeperController(Node):
             '/world/default/wrench',
             10
         )
-        self.left_arm_publisher = self.create_publisher(
-            Float64,
-            '/goalkeeper/left_arm_cmd',
-            10
-        )
-        self.right_arm_publisher = self.create_publisher(
-            Float64,
-            '/goalkeeper/right_arm_cmd',
-            10
-        )
         self.action_publisher = self.create_publisher(
             String,
             '/goalkeeper/action',
@@ -99,7 +89,6 @@ class GoalkeeperController(Node):
         self.current_action = 'READY'
         self.jump_committed = False
 
-        self.command_arms(0.0, 0.0)
         self.get_logger().info(
             f'Using 3D prediction topic: {prediction_topic}'
         )
@@ -128,16 +117,13 @@ class GoalkeeperController(Node):
 
         if should_dive:
             self.set_action('DIVE_LEFT' if lateral_error > 0 else 'DIVE_RIGHT')
-            self.command_dive_arms(lateral_error)
             if should_jump:
                 self.trigger_jump(scale=0.75)
         elif should_jump:
             self.set_action('JUMP')
-            self.command_arms(-1.20, 1.20)
             self.trigger_jump(scale=1.0)
         else:
             self.set_action('TRACK')
-            self.command_arms(-0.15, 0.15)
 
     def odom_callback(self, message: Odometry) -> None:
         self.current_position = message.pose.pose.position.x
@@ -177,16 +163,6 @@ class GoalkeeperController(Node):
             f'Jump impulse commanded: {jump.wrench.force.z:.0f} N'
         )
 
-    def command_dive_arms(self, lateral_error: float) -> None:
-        if lateral_error > 0.0:
-            self.command_arms(-0.55, 0.30)
-        else:
-            self.command_arms(-0.30, 0.55)
-
-    def command_arms(self, left_angle: float, right_angle: float) -> None:
-        self.left_arm_publisher.publish(Float64(data=left_angle))
-        self.right_arm_publisher.publish(Float64(data=right_angle))
-
     def set_action(self, action: str) -> None:
         if action == self.current_action:
             return
@@ -205,7 +181,6 @@ class GoalkeeperController(Node):
         self.predicted_height = 0.06
         self.arrival_time = 0.0
         self.jump_committed = False
-        self.command_arms(0.0, 0.0)
         self.set_action('RECOVER')
 
 
