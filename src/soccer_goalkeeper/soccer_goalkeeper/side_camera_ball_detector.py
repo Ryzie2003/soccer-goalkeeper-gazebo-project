@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
 
 import cv2
-import rclpy
+
 from cv_bridge import CvBridge, CvBridgeError
+
 from geometry_msgs.msg import PointStamped
+
+import rclpy
 from rclpy.node import Node
+from rclpy.time import Time
+
 from sensor_msgs.msg import Image
+
 from soccer_goalkeeper.vision import find_soccer_ball_contour
 
 
 class SideCameraBallDetector(Node):
+    """Detect the ball in the side camera image."""
+
     def __init__(self) -> None:
         super().__init__('side_camera_ball_detector')
 
         self.bridge = CvBridge()
         self.minimum_area = 1.5
-        self.last_log_time = None
+        self.last_log_time: Time | None = None
 
         self.image_subscription = self.create_subscription(
             Image,

@@ -6,11 +6,21 @@ predicts soccer shots, moves across the goal, and performs jumping dives.
 The controller uses simulated camera measurements. Gazebo ground truth is used
 only by the referee and VAR system.
 
-## Demo                                                                                                                           
-Click the preview below to watch the full demonstration on YouTube.                                                                <p align="center">                                                                                     
-  <a href="[https://www.youtube.com/watch?v=DX0d_M0N9cw]">                                               
-    <img src="https://img.youtube.com/vi/DX0d_M0N9cw/hqdefault.jpg" alt="Watch the ROS 2 Soccer Goalkeeper demo" width="700">      </a>                                                                                               
-</p>                                                                                                                                                                                                     
+## Demo
+
+Click the preview below to watch the full demonstration on YouTube.
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=DX0d_M0N9cw">
+    <img
+      src="https://img.youtube.com/vi/DX0d_M0N9cw/hqdefault.jpg"
+      alt="Watch the ROS 2 Soccer Goalkeeper demo"
+      width="700">
+  </a>
+</p>
+
+[Watch the full demo on YouTube](https://www.youtube.com/watch?v=DX0d_M0N9cw)
+
 ## Features
 
 - Custom soccer field, goal, net, ball, and player-style goalkeeper
@@ -100,6 +110,11 @@ ros2 run soccer_goalkeeper ball_launcher --ros-args \
 The launcher verifies each shot, resets the world, waits for the VAR replay to
 finish, and then starts the next trial.
 
+## Trial Results
+
+In a 30-shot trial, the goalkeeper achieved a **90% save rate**, saving 27 of
+30 shots.
+
 ## Useful Topics
 
 | Topic | Purpose |
@@ -130,3 +145,15 @@ src/soccer_goalkeeper/
 - Prediction assumes approximately ballistic vertical motion and steady
   horizontal velocity.
 - Dive forces and thresholds are tuned for this simulated goalkeeper.
+
+## Future Improvements
+
+- Improve jumping and movement mechanics for smoother, more realistic saves.
+- Refine the goalkeeper's mass, collisions, joints, balance, and applied forces
+  for more accurate physics.
+- Make VAR and goal-line tracking more accurate so every goal is classified
+  correctly; currently, some goals are not counted as goals.
+- Expand shot variation and goalkeeper decision-making for less predictable
+  trials.
+- Generalize camera calibration and controller tuning to support different
+  field, camera, and goalkeeper configurations.

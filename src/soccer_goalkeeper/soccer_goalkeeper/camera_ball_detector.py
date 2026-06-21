@@ -3,12 +3,19 @@
 from collections import deque
 
 import cv2
-import numpy as np
-import rclpy
+
 from cv_bridge import CvBridge, CvBridgeError
+
 from geometry_msgs.msg import PointStamped
+
+import numpy as np
+
+import rclpy
 from rclpy.node import Node
+from rclpy.time import Time
+
 from sensor_msgs.msg import Image
+
 from soccer_goalkeeper.vision import find_soccer_ball_contour
 
 
@@ -23,9 +30,9 @@ class CameraBallDetector(Node):
 
         self.bridge = CvBridge()
         self.minimum_area = 1.5
-        self.reference_radius_samples = []
-        self.reference_pixel_radius = None
-        self.height_history = deque(maxlen=5)
+        self.reference_radius_samples: list[float] = []
+        self.reference_pixel_radius: float | None = None
+        self.height_history: deque[float] = deque(maxlen=5)
 
         self.image_subscription = self.create_subscription(
             Image,
@@ -49,7 +56,7 @@ class CameraBallDetector(Node):
             10
         )
 
-        self.last_detection_time = None
+        self.last_detection_time: Time | None = None
 
     def image_callback(self, message: Image) -> None:
         try:

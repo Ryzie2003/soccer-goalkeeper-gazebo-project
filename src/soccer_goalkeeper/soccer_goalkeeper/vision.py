@@ -1,4 +1,5 @@
 import cv2
+
 import numpy as np
 
 
@@ -49,4 +50,8 @@ def find_soccer_ball_contour(image, minimum_area):
 
     # Prefer the roundest candidate, then the larger candidate when shapes
     # have similar circularity.
-    return max(candidates, key=lambda candidate: (candidate[0], candidate[1]))[2]
+    best_candidate = max(
+        candidates,
+        key=lambda candidate: (candidate[0], candidate[1])
+    )
+    return best_candidate[2]

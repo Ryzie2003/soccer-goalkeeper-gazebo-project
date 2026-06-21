@@ -7,7 +7,7 @@ package_name = 'soccer_goalkeeper'
 
 setup(
     name=package_name,
-    version='0.0.0',
+    version='0.1.0',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -37,9 +37,11 @@ setup(
     package_data={'': ['py.typed']},
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='ryan',
-    maintainer_email='ryan@todo.todo',
-    description='TODO: Package description',
+    maintainer='Ryan Zheng',
+    maintainer_email='rzpersonal1@gmail.com',
+    description=(
+        'Camera-guided autonomous soccer goalkeeper for ROS 2 and Gazebo Sim'
+    ),
     license='Apache-2.0',
     extras_require={
         'test': [

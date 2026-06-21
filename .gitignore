@@ -7,11 +7,18 @@ log/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Editors and operating systems
 .vscode/
 .idea/
 .DS_Store
+*.swp
+*.swo
+*~
 
 # Experiment outputs
 results/*
