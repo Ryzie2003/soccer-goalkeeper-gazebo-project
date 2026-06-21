@@ -8,14 +8,9 @@ only by the referee and VAR system.
 
 ## Demo                                                                                                                           
 Click the preview below to watch the full demonstration on YouTube.                                                                <p align="center">                                                                                     
-  <a href="https://www.youtube.com/watch?v=YOUR_VIDEO_ID">                                               
-    <img src="https://img.youtube.com/vi/YOUR_VIDEO_ID/hqdefault.jpg" alt="Watch the ROS 2 Soccer Goalkeeper demo" width="700">      </a>                                                                                               
-</p>                                                                                                                                                                                                      
-<p align="center">                                                                                     
-  <a href="https://www.youtube.com/watch?v=YOUR_VIDEO_ID">                                               
-    Watch the full demo on YouTube                                                                     
-  </a>                                                                                               
-</p>
+  <a href="[https://www.youtube.com/watch?v=](https://youtu.be/DX0d_M0N9cw)">                                               
+    <img src="https://img.youtube.com/vi/DX0d_M0N9cw/hqdefault.jpg" alt="Watch the ROS 2 Soccer Goalkeeper demo" width="700">      </a>                                                                                               
+</p>                                                                                                                                                                                                     
 ## Features
 
 - Custom soccer field, goal, net, ball, and player-style goalkeeper
