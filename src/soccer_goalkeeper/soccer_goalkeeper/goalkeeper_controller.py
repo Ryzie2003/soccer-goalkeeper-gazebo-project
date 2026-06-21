@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import math
+import statistics
 
 from geometry_msgs.msg import PointStamped, TwistStamped
 
@@ -12,21 +13,28 @@ from rclpy.time import Time
 
 from ros_gz_interfaces.msg import EntityWrench
 
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 
 class GoalkeeperController(Node):
     """Select lateral, jump, and dive actions from camera predictions."""
 
     TARGET_LIMIT = 0.78
-    JUMP_HEIGHT_THRESHOLD = 0.42
-    JUMP_TRIGGER_TIME = 1.80
+    JUMP_HEIGHT_THRESHOLD = 0.32
+    JUMP_TRIGGER_TIME = 1.50
+    HIGH_CORNER_THRESHOLD = 0.18
+    HIGH_DIVE_MINIMUM_ERROR = 0.10
     DIVE_DISTANCE_THRESHOLD = 0.16
-    DIVE_TRIGGER_TIME = 2.20
-    ACTION_DURATION = 0.12
+    DIVE_TRIGGER_TIME = 1.50
+    PREDICTION_WINDOW = 4
+    REQUIRED_PREDICTIONS = 3
+    MAX_LATERAL_SPREAD = 0.28
+    HIGH_DIVE_DURATION = 0.17
+    LOW_DIVE_DURATION = 0.12
     ACTION_RATE = 150.0
     GRAVITY = 9.81
     BODY_CENTER_HEIGHT = 0.46
+    POSITION_SAFETY_LIMIT = 0.84
 
     def __init__(self) -> None:
         super().__init__('goalkeeper_controller')
@@ -40,11 +48,17 @@ class GoalkeeperController(Node):
         self.declare_parameter('dive_speed', 5.0)
         self.declare_parameter('estimated_mass', 1.2)
         self.declare_parameter('launch_force_gain', 115.0)
-        self.declare_parameter('minimum_lateral_force', 150.0)
-        self.declare_parameter('minimum_vertical_force', 255.0)
-        self.declare_parameter('maximum_lateral_force', 340.0)
-        self.declare_parameter('maximum_vertical_force', 425.0)
-        self.declare_parameter('dive_roll_torque', 25.0)
+        self.declare_parameter('minimum_lateral_force', 170.0)
+        self.declare_parameter('minimum_vertical_force', 400.0)
+        self.declare_parameter('maximum_lateral_force', 450.0)
+        self.declare_parameter('maximum_vertical_force', 560.0)
+        self.declare_parameter('dive_roll_torque', 32.0)
+        self.declare_parameter('low_dive_minimum_force', 120.0)
+        self.declare_parameter('low_dive_maximum_force', 290.0)
+        self.declare_parameter('low_dive_vertical_force', 145.0)
+        self.declare_parameter('low_dive_roll_torque', 45.0)
+        self.declare_parameter('low_dive_positive_gain', 1.22)
+        self.declare_parameter('low_dive_negative_gain', 0.82)
         self.declare_parameter('deadband', 0.01)
 
         prediction_topic = self.get_parameter(
@@ -80,6 +94,24 @@ class GoalkeeperController(Node):
         self.dive_roll_torque = self.get_parameter(
             'dive_roll_torque'
         ).get_parameter_value().double_value
+        self.low_dive_minimum_force = self.get_parameter(
+            'low_dive_minimum_force'
+        ).get_parameter_value().double_value
+        self.low_dive_maximum_force = self.get_parameter(
+            'low_dive_maximum_force'
+        ).get_parameter_value().double_value
+        self.low_dive_vertical_force = self.get_parameter(
+            'low_dive_vertical_force'
+        ).get_parameter_value().double_value
+        self.low_dive_roll_torque = self.get_parameter(
+            'low_dive_roll_torque'
+        ).get_parameter_value().double_value
+        self.low_dive_positive_gain = self.get_parameter(
+            'low_dive_positive_gain'
+        ).get_parameter_value().double_value
+        self.low_dive_negative_gain = self.get_parameter(
+            'low_dive_negative_gain'
+        ).get_parameter_value().double_value
         self.deadband = self.get_parameter(
             'deadband'
         ).get_parameter_value().double_value
@@ -112,6 +144,12 @@ class GoalkeeperController(Node):
             self.prediction_callback,
             10
         )
+        self.shot_active_subscription = self.create_subscription(
+            Bool,
+            '/shot_active',
+            self.shot_active_callback,
+            10
+        )
 
         self.target_position = 0.0
         self.predicted_height = 0.06
@@ -119,12 +157,17 @@ class GoalkeeperController(Node):
         self.current_position = 0.0
         self.current_height = 0.05
         self.current_action = 'READY'
+        self.shot_active = False
         self.jump_committed = False
         self.action_committed = False
         self.action_start_time: Time | None = None
         self.action_vertical_force = 0.0
         self.action_lateral_force = 0.0
         self.action_roll_torque = 0.0
+        self.action_duration = self.HIGH_DIVE_DURATION
+        self.action_direction = 0.0
+        self.action_stop_position = 0.0
+        self.prediction_history: list[tuple[float, float, float]] = []
         self.action_timer = self.create_timer(
             1.0 / self.ACTION_RATE,
             self.publish_active_wrench
@@ -135,15 +178,57 @@ class GoalkeeperController(Node):
         )
 
     def prediction_callback(self, message: PointStamped) -> None:
-        self.target_position = max(
+        if not self.shot_active:
+            return
+
+        raw_target = max(
             -self.TARGET_LIMIT,
             min(self.TARGET_LIMIT, message.point.x)
         )
-        self.predicted_height = message.point.y
-        self.arrival_time = message.point.z
+        raw_height = message.point.y
+        raw_arrival = message.point.z
 
-        if self.arrival_time <= 0.0:
-            self.recover()
+        if raw_arrival <= 0.0:
+            # A detector can briefly lose the ball after a collision. Do not
+            # clear the committed-action latch here, because a later noisy
+            # estimate from the same shot could otherwise trigger a second
+            # dive. Only /shot_active may rearm the controller.
+            if not self.action_committed:
+                self.set_action('TRACK')
+            return
+
+        self.prediction_history.append(
+            (raw_target, raw_height, raw_arrival)
+        )
+        self.prediction_history = self.prediction_history[
+            -self.PREDICTION_WINDOW:
+        ]
+
+        # Steer immediately, but wait for several camera estimates before
+        # committing to a one-way physical dive.
+        self.target_position = raw_target
+        self.predicted_height = raw_height
+        self.arrival_time = raw_arrival
+        if len(self.prediction_history) < self.REQUIRED_PREDICTIONS:
+            self.set_action('TRACK')
+            return
+
+        lateral_predictions = [
+            prediction[0] for prediction in self.prediction_history
+        ]
+        self.target_position = statistics.median(lateral_predictions)
+        self.predicted_height = statistics.median(
+            prediction[1] for prediction in self.prediction_history
+        )
+        self.arrival_time = statistics.median(
+            prediction[2] for prediction in self.prediction_history
+        )
+
+        lateral_spread = (
+            max(lateral_predictions) - min(lateral_predictions)
+        )
+        if lateral_spread > self.MAX_LATERAL_SPREAD:
+            self.set_action('TRACK')
             return
 
         lateral_error = self.target_position - self.current_position
@@ -162,23 +247,49 @@ class GoalkeeperController(Node):
             self.predicted_height >= self.JUMP_HEIGHT_THRESHOLD
             and self.arrival_time <= self.JUMP_TRIGGER_TIME
         )
+        should_high_corner_dive = (
+            should_jump
+            and abs(self.target_position) >= self.HIGH_CORNER_THRESHOLD
+        )
 
-        if should_dive:
-            self.set_action('DIVE_LEFT' if lateral_error > 0 else 'DIVE_RIGHT')
+        if should_dive or should_high_corner_dive:
+            launch_error = lateral_error
+            if (
+                should_high_corner_dive
+                and abs(launch_error) < self.HIGH_DIVE_MINIMUM_ERROR
+            ):
+                launch_error = math.copysign(
+                    self.HIGH_DIVE_MINIMUM_ERROR,
+                    self.target_position
+                )
+
+            self.set_action(
+                'DIVE_LEFT' if launch_error > 0 else 'DIVE_RIGHT'
+            )
             self.action_committed = True
             self.trigger_diagonal_launch(
-                lateral_error,
+                launch_error,
                 include_vertical_launch=should_jump
             )
-        elif should_jump:
-            self.set_action('JUMP')
-            self.action_committed = True
-            self.trigger_diagonal_launch(
-                0.0,
-                include_vertical_launch=True
-            )
         else:
+            # A high shot near the center is already covered by the standing
+            # goalkeeper. Reserve vertical launch for lateral corner dives.
             self.set_action('TRACK')
+
+    def shot_active_callback(self, message: Bool) -> None:
+        if message.data == self.shot_active:
+            return
+
+        self.shot_active = message.data
+        if self.shot_active:
+            self.prediction_history.clear()
+            self.get_logger().info('Shot armed; camera predictions enabled')
+        else:
+            self.prediction_history.clear()
+            self.recover()
+            self.get_logger().info(
+                'Shot disarmed; ignoring post-shot camera predictions'
+            )
 
     def odom_callback(self, message: Odometry) -> None:
         self.current_position = message.pose.pose.position.x
@@ -188,7 +299,12 @@ class GoalkeeperController(Node):
         command = TwistStamped()
         command.header.stamp = self.get_clock().now().to_msg()
 
-        if abs(error) < self.deadband:
+        # Once a physical dive is committed, the wrench owns the movement.
+        # Continuing to drive the wheels would add an uncontrolled second
+        # lateral command and carry the goalkeeper out of the goal.
+        if self.action_committed:
+            command.twist.linear.x = 0.0
+        elif abs(error) < self.deadband:
             command.twist.linear.x = 0.0
         else:
             speed_limit = (
@@ -253,15 +369,63 @@ class GoalkeeperController(Node):
             min(self.maximum_lateral_force, lateral_force)
         )
         if include_vertical_launch:
+            lateral_force = direction * max(
+                self.minimum_lateral_force,
+                min(
+                    self.maximum_lateral_force,
+                    abs(lateral_force) * 1.30
+                )
+            )
             vertical_force = max(
                 self.minimum_vertical_force,
                 min(self.maximum_vertical_force, vertical_force)
             )
+            action_duration = self.scaled_action_duration(
+                abs(lateral_error),
+                minimum=0.14,
+                maximum=self.HIGH_DIVE_DURATION
+            )
+            roll_torque = self.dive_roll_torque
+            stop_fraction = 0.90
+        else:
+            # A low save should travel aggressively across the goal line
+            # while briefly unloading the wheels so roll torque can tilt the
+            # body. This force is far below the high-shot launch profile.
+            lateral_force = direction * max(
+                self.low_dive_minimum_force,
+                min(self.low_dive_maximum_force, abs(lateral_force) * 1.15)
+            )
+            if direction > 0.0:
+                lateral_force = min(
+                    self.low_dive_maximum_force,
+                    lateral_force * self.low_dive_positive_gain
+                )
+            else:
+                lateral_force *= self.low_dive_negative_gain
+            vertical_force = self.low_dive_vertical_force
+            action_duration = self.scaled_action_duration(
+                abs(lateral_error),
+                minimum=0.07,
+                maximum=self.LOW_DIVE_DURATION
+            )
+            if direction < 0.0:
+                action_duration *= 0.85
+            roll_torque = self.low_dive_roll_torque
+            stop_fraction = 0.84 if direction > 0.0 else 0.62
 
         self.action_start_time = self.get_clock().now()
         self.action_vertical_force = vertical_force
         self.action_lateral_force = lateral_force
-        self.action_roll_torque = -direction * self.dive_roll_torque
+        self.action_roll_torque = -direction * roll_torque
+        self.action_duration = action_duration
+        self.action_direction = direction
+        self.action_stop_position = max(
+            -self.POSITION_SAFETY_LIMIT,
+            min(
+                self.POSITION_SAFETY_LIMIT,
+                self.current_position + stop_fraction * lateral_error
+            )
+        )
         self.jump_committed = True
 
         self.get_logger().info(
@@ -273,8 +437,18 @@ class GoalkeeperController(Node):
             f'lateral={lateral_force:.0f} N, '
             f'vertical={vertical_force:.0f} N, '
             f'roll={self.action_roll_torque:.0f} Nm, '
-            f'duration={self.ACTION_DURATION:.2f}s'
+            f'duration={self.action_duration:.2f}s, '
+            f'stop={self.action_stop_position:.2f}m'
         )
+
+    def scaled_action_duration(
+        self,
+        distance: float,
+        minimum: float,
+        maximum: float
+    ) -> float:
+        distance_ratio = min(1.0, distance / self.TARGET_LIMIT)
+        return minimum + distance_ratio * (maximum - minimum)
 
     def publish_active_wrench(self) -> None:
         if self.action_start_time is None:
@@ -283,9 +457,23 @@ class GoalkeeperController(Node):
         elapsed = (
             self.get_clock().now() - self.action_start_time
         ).nanoseconds / 1e9
-        if elapsed < 0.0 or elapsed > self.ACTION_DURATION:
+        if elapsed < 0.0 or elapsed > self.action_duration:
             self.action_start_time = None
             return
+
+        reached_intercept = (
+            self.action_direction > 0.0
+            and self.current_position >= self.action_stop_position
+        ) or (
+            self.action_direction < 0.0
+            and self.current_position <= self.action_stop_position
+        )
+        reached_boundary = (
+            abs(self.current_position) >= self.POSITION_SAFETY_LIMIT
+        )
+        if reached_intercept or reached_boundary:
+            self.action_lateral_force = 0.0
+            self.action_roll_torque = 0.0
 
         wrench = EntityWrench()
         wrench.entity.name = 'burger::base_link'
@@ -318,6 +506,9 @@ class GoalkeeperController(Node):
         self.action_vertical_force = 0.0
         self.action_lateral_force = 0.0
         self.action_roll_torque = 0.0
+        self.action_duration = self.HIGH_DIVE_DURATION
+        self.action_direction = 0.0
+        self.action_stop_position = 0.0
         self.set_action('RECOVER')
 
 
